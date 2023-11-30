@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:leagueduoapp/pickerscreen.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:leagueduoapp/loginscreen.dart';
 
 class Titlescreen extends StatelessWidget{
-  const Titlescreen({super.key});
+  const Titlescreen({super.key, required this.googleSignIn});
+  final GoogleSignIn googleSignIn;
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -25,7 +27,7 @@ class Titlescreen extends StatelessWidget{
             onPressed: () => {
               Navigator.pushAndRemoveUntil<void>(
                 context, 
-                MaterialPageRoute<void>(builder: (BuildContext context) => const PickerScreen()), 
+                MaterialPageRoute<void>(builder: (BuildContext context) => LoginScreen(googleSignIn: googleSignIn,)), 
                 (Route<dynamic> route) => false
               )
             },
