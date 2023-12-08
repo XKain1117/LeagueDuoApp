@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:leagueduoapp/accountfetcher.dart';
@@ -22,6 +24,7 @@ class PickerScreen extends StatefulWidget {
 class _PickerState extends State<PickerScreen>{
   late Future<AppAccount> account;
   final myController = TextEditingController();
+  late Timer _timer;
 
    
   Future<void> refreshAccount() async {
@@ -45,47 +48,95 @@ class _PickerState extends State<PickerScreen>{
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0, 
+        automaticallyImplyLeading: false,
+        actions: [
+          Builder(
+            builder: (BuildContext context) {
+              return Container(
+                margin: const EdgeInsets.only(top: 8.0, right: 12.0), // Adjust margins as needed
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.green, // Change the color to your desired color
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () {
+                    Scaffold.of(context).openEndDrawer();
+                  },
+                  color: const Color.fromARGB(255, 250, 198, 198), // Change the color to your desired icon color
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      endDrawer: Drawer(
+        child: Padding(
+          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    children: [
+                      ListTile(
+                        title: const Text('Logout'),
+                        onTap: () {
+                          signOutWithGoogle();
+                          setState(() {
+                            googleUser = null;
+                          });
+                          Navigator.pop(context);
+                          Navigator.pushAndRemoveUntil<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (BuildContext context) =>
+                                  LoginScreen(googleSignIn: widget.googleSignIn),
+                            ),
+                            (Route<dynamic> route) => false,
+                          );
+                        },
+                      ),
+                      Divider(),
+                      ListTile(
+                        title: const Text('Account'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (BuildContext context) => AccountScreen(
+                                userId: widget.userId,
+                                googleSignIn: widget.googleSignIn,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      Divider(),
+                      ListTile(
+                        title: const Text('Refresh'),
+                        onTap: () {
+                          refreshAccount();
+                          Navigator.pop(context); // Close the drawer after selecting an item
+                        },
+                      ),
+                      Divider(),
+                    ],
+                  ),
+          ],
+        ),
+      )
+      ),
       body:Column(
         children: [
-          Align(
-            alignment: Alignment.topRight,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const SizedBox(height: 20,),
-                  ElevatedButton(
-                  onPressed: () {
-                    signOutWithGoogle(); 
-                    setState(() {
-                      googleUser = null;
-                    });
-                    Navigator.pushAndRemoveUntil<void>(
-                      context, 
-                      MaterialPageRoute<void>(builder: (BuildContext context) => LoginScreen(googleSignIn: widget.googleSignIn)), 
-                      (Route<dynamic> route) => false
-                    ); 
-                  },
-                  child: const Text('Logout')
-                ),
-                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.push<void>(
-                      context, 
-                      MaterialPageRoute<void>(builder: (BuildContext context) => AccountScreen(userId: widget.userId, googleSignIn: widget.googleSignIn)), 
-                    ); 
-                  },
-                  child: const Text('Account')
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    refreshAccount();
-                  },
-                  child: const Text('Refresh')
-                ),
-              ],
-            ),
-          ),
           Expanded(
             child:FutureBuilder<AppAccount>(
               future: account,
@@ -120,19 +171,32 @@ class _PickerState extends State<PickerScreen>{
                                 child: Column(
                                   children: [
                                     
-                                    Container(
-                                      alignment: Alignment.topCenter,
-                                      width: 100,
-                                      height: 100,
-                                      color: const Color.fromARGB(255, 35, 21, 196),
-                                      child: const SizedBox.expand(
-                                            child: FittedBox(
-                                              fit: BoxFit.fill,
-                                              child: Icon(
-                                                Icons.accessible,
-                                              )
-                                            )
-                                          )
+                                    FutureBuilder<String>(
+                                      future: FirebaseStorage.instance
+                                        .ref('${snapshot.data!.leagueAccount['profileIcon']}.png')
+                                        .getDownloadURL(),
+                                      builder: (context, urlSnapshot) {
+                                        if (urlSnapshot.connectionState == ConnectionState.waiting) {
+                                          return CircularProgressIndicator();
+                                        } else if (urlSnapshot.hasError) {
+                                          return Text('Error: ${urlSnapshot.error}');
+                                        } else {
+                                          // Convert the String URL to Uri
+                                          Uri imageUrl = Uri.parse(urlSnapshot.data!);
+
+                                          // Use the Uri to load the image
+                                          return Container(
+                                            width: 100,
+                                            height: 100,
+                                            decoration: BoxDecoration(
+                                              image: DecorationImage(
+                                                image: NetworkImage(imageUrl.toString()),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
                                     ),
 
                                     Row(
@@ -276,13 +340,16 @@ Future<AppAccount> chooseRandomCard() async {
     if (availableAccounts.isNotEmpty) {
       int randomIndex = Random().nextInt(availableAccounts.length);
       QueryDocumentSnapshot randomDocument = availableAccounts[randomIndex];
-
-      return AppAccount.fromMap(randomDocument.data() as Map<String, dynamic>);
+      return Future.delayed(const Duration(seconds: 2), () {
+        return AppAccount.fromMap(randomDocument.data() as Map<String, dynamic>);
+      });
     }
   }
 
   // Return a default account if no valid account is found
-  return AppAccount();
+  return Future.delayed(const Duration(seconds: 2), () {
+        return AppAccount();
+      });
 }
 
 
@@ -291,10 +358,17 @@ Future<AppAccount> chooseRandomCard() async {
   void initState() {
     super.initState();
     account = chooseRandomCard();
+    _timer = Timer.periodic(const Duration(seconds: 30), (Timer timer) {
+      setState(() {
+        print("Timer went");
+        account = chooseRandomCard();
+      });
+    });
   }
    @override
   void dispose() {
     super.dispose();
+    _timer.cancel();
   }
 }
 

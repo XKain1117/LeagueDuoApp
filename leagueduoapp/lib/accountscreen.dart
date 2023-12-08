@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:leagueduoapp/chathandler.dart';
 import 'package:leagueduoapp/chatscreen.dart';
 
 class AccountScreen extends StatefulWidget {
@@ -121,7 +122,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                                     // Use the FutureBuilder to load profile pictures
                                                     FutureBuilder<String>(
                                                       future: FirebaseStorage.instance
-                                                        .ref('0.png')
+                                                        .ref('${list[index]['leagueAccount']['profileIcon']}.png')
                                                         .getDownloadURL(),
                                                       builder: (context, urlSnapshot) {
                                                         if (urlSnapshot.connectionState == ConnectionState.waiting) {
@@ -130,7 +131,6 @@ class _AccountScreenState extends State<AccountScreen> {
                                                           return Text('Error: ${urlSnapshot.error}');
                                                         } else {
                                                           // Convert the String URL to Uri
-                                                          print(urlSnapshot.data);
                                                           Uri imageUrl = Uri.parse(urlSnapshot.data!);
 
                                                           // Use the Uri to load the image
@@ -206,7 +206,6 @@ class _AccountScreenState extends State<AccountScreen> {
                                                       onPressed: () async {
                                                         final userChats = await fetchUserChats();
                                                         String otherPersonAccountName = list[index]['id']; // Replace this with the correct path to the account name
-
                                                         try {
                                                           // Check if there's an existing chat with the other person
                                                           var existingChat = userChats.firstWhere(
@@ -222,15 +221,20 @@ class _AccountScreenState extends State<AccountScreen> {
                                                             ),
                                                           );
                                                         } catch (error) {
-                                                          // Chat doesn't exist, create it
-                                                          // You need to create a new chat and navigate to the ChatsScreen with the new chat ID
-                                                          // Add the necessary logic to create a chat here
-                                                        }
+                                                          FirebaseFirestore firestore = FirebaseFirestore.instance;
+                                                          CollectionReference accountsCollection = firestore.collection('Chats');
+                                                          DocumentReference d = accountsCollection.doc(widget.userId);
+                                                          DocumentSnapshot dSnap = await d.get();
+                                                          Chat c = Chat(
+                                                            members: [widget.userId, list[index]['id']],
+                                                            messages: <Map<String, dynamic>>[],
+                                                          );                                        
+                                                          DocumentReference addedDocRef = await accountsCollection.add(c.toMap());
+                                                        }                                       
                                                       },
                                                       child: const Text("Open Chat"),
                                                     ),
-
-
+                                                
                                                   ],
                                                 ),
                                               ),
